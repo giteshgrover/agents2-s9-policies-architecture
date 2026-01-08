@@ -74,11 +74,11 @@ class HistoricalMemoryManager:
     def find_recent_successes(self, intent: str, entities: List[str] = [], limit: int = 5) -> List[str]:
         """Find tool names which succeeded recently."""
         tool_successes = []
-        pdb.set_trace()
+        # pdb.set_trace()
 
         # Search from newest to oldest
         for item in reversed(self.items):
-            if item.type == "tool_output" and item.success and item.intent == intent and item.entities == entities:
+            if item.type == "tool_output" and item.success and item.intent == intent and set(item.entities) == set(entities):
                 if item.tool_name and item.tool_name not in tool_successes:
                     tool_successes.append(item.tool_name)
             if len(tool_successes) >= limit:

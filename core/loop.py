@@ -53,7 +53,7 @@ class AgentLoop:
                 perception = await run_perception(context=self.context, user_input=user_input_override or self.context.user_input)
 
                 print(f"[perception] {perception}")
-                pdb.set_trace()
+                # pdb.set_trace()
 
                 all_tools = self.mcp.get_all_tools
                 selected_tools = find_recent_successful_tools_from_history(self.context, perception, all_tools)
