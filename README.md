@@ -10,6 +10,7 @@ A reasoning-driven AI agent capable of using external tools and memory to solve 
 - [Data Flow](#data-flow)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [Examples](#example-queries-and-logs)
 
 ## Overview
 
@@ -482,3 +483,43 @@ agents2-s9-policies-architecture/
 └── documents/               # Document storage for search
 ```
 
+## Example Queries and logs
+ ### Example 1 - what is the capital of North Carolina State (USA)?
+ ````
+ What do you want to solve today? → what is the capital of North Carolina State (USA)?
+🔁 Step 1/3 starting...
+[23:20:49] [perception] Raw output: ```json
+{
+  "intent": "Find the capital city of North Carolina.",
+  "entities": ["North Carolina"],
+  "tool_hint": "websearch",
+  "selected_servers": ["websearch"]
+}
+```
+result {'intent': 'Find the capital city of North Carolina.', 'entities': ['North Carolina'], 'tool_hint': 'websearch', 'selected_servers': ['websearch']}
+[perception] intent='Find the capital city of North Carolina.' entities=['North Carolina'] tool_hint='websearch' tags=[] selected_servers=['websearch']
+[23:20:50] [plan] LLM output: ```python
+async def solve():
+    """duckduckgo_search_results: Search DuckDuckGo. Usage: input={"input": {"query": "latest AI developments", "max_results": 5} } result = await mcp.call_tool('duckduckgo_search_results', input)"""
+    input = {"input": {"query": "capital of North Carolina", "max_results": 1}}
+    result = await mcp.call_tool('duckduckgo_search_results', input)
+    parsed = json.loads(result.content[0].text)["result"]
+    return f"FINAL_ANSWER: Raleigh"
+```
+[plan] async def solve():
+    """duckduckgo_search_results: Search DuckDuckGo. Usage: input={"input": {"query": "latest AI developments", "max_results": 5} } result = await mcp.call_tool('duckduckgo_search_results', input)"""
+    input = {"input": {"query": "capital of North Carolina", "max_results": 1}}
+    result = await mcp.call_tool('duckduckgo_search_results', input)
+    parsed = json.loads(result.content[0].text)["result"]
+    return f"FINAL_ANSWER: Raleigh"
+[loop] Detected solve() plan — running sandboxed...
+[action] 🔍 Entered run_python_sandbox()
+[01/07/26 23:20:51] INFO     Processing request of type               server.py:534
+                             CallToolRequest                                       
+[01/07/26 23:20:52] INFO     HTTP Request: POST                     _client.py:1740
+                             https://html.duckduckgo.com/html                      
+                             "HTTP/1.1 200 OK"                                     
+
+💡 Final Answer: Raleigh
+🧑 What do you want to solve today? → 
+````
