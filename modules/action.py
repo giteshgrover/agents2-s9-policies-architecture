@@ -24,7 +24,7 @@ class ToolCallResult(BaseModel):
 
 MAX_TOOL_CALLS_PER_PLAN = 5
 
-async def run_python_sandbox(code: str, dispatcher: Any) -> str:
+async def run_python_sandbox(code: str, dispatcher: Any, called_tools: list = []) -> str:
     print("[action] 🔍 Entered run_python_sandbox()")
 
     # Create a fresh module scope
@@ -36,6 +36,7 @@ async def run_python_sandbox(code: str, dispatcher: Any) -> str:
             def __init__(self, dispatcher):
                 self.dispatcher = dispatcher
                 self.call_count = 0
+                self.called_tools = []
 
             async def call_tool(self, tool_name: str, input_dict: dict):
                 self.call_count += 1
@@ -43,6 +44,7 @@ async def run_python_sandbox(code: str, dispatcher: Any) -> str:
                     raise RuntimeError(f"Exceeded max tool calls ({MAX_TOOL_CALLS_PER_PLAN}) in solve() plan.")
                 # REAL tool call now
                 result = await self.dispatcher.call_tool(tool_name, input_dict)
+                self.called_tools.append(tool_name)
                 return result
 
         sandbox.mcp = SandboxMCP(dispatcher)
@@ -64,6 +66,7 @@ async def run_python_sandbox(code: str, dispatcher: Any) -> str:
         else:
             result = solve_fn()
 
+        called_tools.extend(sandbox.mcp.called_tools)
         # Clean result formatting
         if isinstance(result, dict) and "result" in result:
             return f"{result['result']}"

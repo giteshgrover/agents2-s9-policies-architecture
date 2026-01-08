@@ -2,6 +2,7 @@
 
 from typing import List, Optional, Dict, Any
 from modules.memory import MemoryManager, MemoryItem
+from modules.historical_memory import HistoricalMemoryManager, HistoricalMemoryItem
 from core.session import MultiMCP  # For dispatcher typing
 from pathlib import Path
 import yaml
@@ -55,6 +56,7 @@ class AgentContext:
         self.user_input = user_input
         self.agent_profile = AgentProfile()
         self.memory = MemoryManager(session_id=session_id)
+        self.historical_memory=HistoricalMemoryManager()
         self.session_id = self.memory.session_id
         self.dispatcher = dispatcher  # 🆕 Added formally
         self.mcp_server_descriptions = mcp_server_descriptions  # 🆕 Added formally

@@ -6,7 +6,7 @@ from modules.decision import generate_plan
 from modules.action import run_python_sandbox
 from modules.model_manager import ModelManager
 from core.session import MultiMCP
-from core.strategy import select_decision_prompt_path
+from core.strategy import select_decision_prompt_path, find_recent_successful_tools_from_history
 from core.context import AgentContext
 from modules.tools import summarize_tools
 import re
@@ -29,6 +29,7 @@ class AgentLoop:
 
     async def run(self):
         max_steps = self.context.agent_profile.strategy.max_steps
+        called_tools = []
 
         for step in range(max_steps):
             print(f"🔁 Step {step+1}/{max_steps} starting...")
@@ -52,10 +53,14 @@ class AgentLoop:
                 perception = await run_perception(context=self.context, user_input=user_input_override or self.context.user_input)
 
                 print(f"[perception] {perception}")
-                # pdb.set_trace()
+                pdb.set_trace()
 
-                selected_servers = perception.selected_servers
-                selected_tools = self.mcp.get_tools_from_servers(selected_servers)
+                all_tools = self.mcp.get_all_tools
+                selected_tools = find_recent_successful_tools_from_history(self.context, perception, all_tools)
+                if not selected_tools:
+                    selected_servers = perception.selected_servers
+                    selected_tools = self.mcp.get_tools_from_servers(selected_servers)
+                
                 if not selected_tools:
                     log("loop", "⚠️ No tools selected — aborting step.")
                     break
@@ -85,13 +90,14 @@ class AgentLoop:
                     print("[loop] Heuristic check failed on plan")
                     log("loop", f"⚠️ Invalid plan detected — retrying... Lifelines left: {lifelines_left-1}")
                     lifelines_left -= 1
+                    # TODO shouldn't we add the failed plan to the memory or update the user_input_override?
                     continue
 
                 # === Execution ===
                 print("[loop] Detected solve() plan — running sandboxed...")
 
                 self.context.log_subtask(tool_name="solve_sandbox", status="pending")
-                result = await run_python_sandbox(plan, dispatcher=self.mcp)
+                result = await run_python_sandbox(plan, dispatcher=self.mcp, called_tools=called_tools)
 
                 success = False
                 if isinstance(result, str):
@@ -107,6 +113,14 @@ class AgentLoop:
                             success=True,
                             tags=["sandbox"],
                         )
+                        # As the final answer achieved, record all tool calls as success
+                        for tool_name in called_tools:
+                            self.context.historical_memory.add_tool_call(
+                                tool_name=tool_name,
+                                success=True,
+                                intent=perception.intent,
+                                entities=perception.entities
+                            )
                         return {"status": "done", "result": self.context.final_answer}
                     elif result.startswith("FURTHER_PROCESSING_REQUIRED:"):
                         content = result.split("FURTHER_PROCESSING_REQUIRED:")[1].strip()
@@ -120,7 +134,7 @@ class AgentLoop:
                         )
                         log("loop", f"📨 Forwarding intermediate result to next step:\n{self.context.user_input_override}\n\n")
                         log("loop", f"🔁 Continuing based on FURTHER_PROCESSING_REQUIRED — Step {step+1} continues...")
-                        break  # Step will continue
+                        break  # Step will continue (outer loop)
                     elif result.startswith("[sandbox error:"):
                         success = False
                         self.context.final_answer = "FINAL_ANSWER: [Execution failed]"
@@ -144,6 +158,14 @@ class AgentLoop:
                 )
 
                 if success and "FURTHER_PROCESSING_REQUIRED:" not in result:
+                    # As the final answer achieved, record all tool calls as success
+                    for tool_name in called_tools:
+                        self.context.historical_memory.add_tool_call(
+                            tool_name=tool_name,
+                            success=True,
+                            intent=perception.intent,
+                            entities=perception.entities
+                        )
                     return {"status": "done", "result": self.context.final_answer}
                 else:
                     lifelines_left -= 1
@@ -153,4 +175,12 @@ class AgentLoop:
 
         log("loop", "⚠️ Max steps reached without finding final answer.")
         self.context.final_answer = "FINAL_ANSWER: [Max steps reached]"
+        # As the final answer awas not achieved, record all tool calls as failure
+        for tool_name in called_tools:
+            self.context.historical_memory.add_tool_call(
+                tool_name=tool_name,
+                success=False,
+                intent=perception.intent,
+                entities=perception.entities
+            )
         return {"status": "done", "result": self.context.final_answer}

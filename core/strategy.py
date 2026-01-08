@@ -53,6 +53,9 @@ async def decide_next_action(
     # === Select correct decision prompt path ===
     prompt_path = select_decision_prompt_path(planning_mode, exploration_mode)
 
+    # TODO GG: Filter tools based on past memory items
+    # recent_tools = filter_tools_by_memory(memory_items)
+    
     # Filter tools based on Perception hint
     tool_hint = perception.tool_hint
     filtered_tools = filter_tools_by_hint(all_tools, hint=tool_hint)
@@ -81,6 +84,7 @@ async def decide_next_action(
         max_steps=max_steps,
     )
     return plan
+
 
 # === CONSERVATIVE MODE ===
 async def conservative_plan(
@@ -210,3 +214,10 @@ def find_recent_successful_tools(memory_items: List[MemoryItem], limit: int = 5)
             break
 
     return successful_tools
+
+def find_recent_successful_tools_from_history(context: AgentContext, perception: PerceptionResult, all_tools: List[Any]) -> List[Any]:
+    memory_hits = context.historical_memory.find_recent_successes(perception.intent, perception.entities)
+    if memory_hits:
+        return [tool for tool in all_tools if tool.name in memory_hits.tool_name]
+
+    return []
